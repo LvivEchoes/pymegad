@@ -6,18 +6,6 @@ import sys
 import imp
 import subprocess
 
-## Python 2.6 subprocess.check_output compatibility. Thanks Greg Hewgill!
-if 'check_output' not in dir(subprocess):
-    def check_output(cmd_args, *args, **kwargs):
-        proc = subprocess.Popen(
-            cmd_args, *args,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
-        out, err = proc.communicate()
-        if proc.returncode != 0:
-            raise subprocess.CalledProcessError(args)
-        return out
-    subprocess.check_output = check_output
-
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 from distutils import spawn
