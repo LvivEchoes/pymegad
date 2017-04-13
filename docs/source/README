@@ -1,0 +1,5 @@
+Run `sphinx-apidoc -o . ../../pymegad' in this directory.
+
+This will generate `modules.rst' and `pymegad.rst'.
+
+Then include `modules.rst' in your `index.rst' file.
