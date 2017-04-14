@@ -7,6 +7,14 @@ import concurrent.futures
 import yaml
 from urllib.parse import urlsplit
 
+mega_yaml = """
+all: all
+megaid: mdid
+start: st
+port_update: pt
+port_off: m
+"""
+
 CONF_ON_STATE = 'ON'
 CONF_OFF_STATE = 'OFF'
 
@@ -38,9 +46,9 @@ class MegadServer:
             self.ports = {port: SwitchPort(port) for port in params.get('ports')}
 
     def mega_conf_load(self):
-        with open('mega.yaml') as mega_conf:
-            self._mega_def = yaml.load(mega_conf)
-            logging.info('Mega definition loaded: {}'.format(self._mega_def))
+
+        self._mega_def = yaml.load(mega_yaml)
+        logging.info('Mega definition loaded: {}'.format(self._mega_def))
 
     def config_parser(self):
         if self._config:
