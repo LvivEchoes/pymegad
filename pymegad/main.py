@@ -28,17 +28,27 @@ class EchoServer(object):
     def handle_connection(self, reader, writer):
         peername = writer.get_extra_info('peername')
         logging.info('Accepted connection from {}'.format(peername))
+        host = False
+        get_params = False
         while not reader.at_eof():
             try:
-                line = yield from asyncio.wait_for(reader.readline(), timeout=10.0)
-                logging.debug('Recived data: {}'.format(line))
-                if not line.strip():
+                response = yield from asyncio.wait_for(reader.readline(), timeout=10.0)
+                line = response.decode().strip()
+                split_line = line.split()
+                if split_line:
+                    if split_line[0].lower() == 'get':
+                        get_params = split_line[1]
+                    elif split_line[0].lower() == 'host:':
+                        host = split_line[1].split(':')[0]
+                if not line:
                     break
+                logging.debug('Recived data: {}'.format(line))
             except concurrent.futures.TimeoutError:
                 logging.error('Conection Timeout')
                 break
-
+        logging.info('Accepted command from {}: {}'.format(host, get_params))
         writer.write(b'{"OK":1}')
+        yield from writer.drain()
         logging.info('Closing connection')
         writer.close()
 
