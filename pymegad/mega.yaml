@@ -1,0 +1,5 @@
+all: all
+megaid: mdid
+start: st
+port_update: pt
+port_off: m
