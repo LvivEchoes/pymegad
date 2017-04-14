@@ -30,16 +30,22 @@ class EchoServer(object):
         logging.info('Accepted connection from {}'.format(peername))
         while not reader.at_eof():
             try:
-                data = yield from asyncio.wait_for(reader.readline(), timeout=10.0)
-                writer.write(data)
+                line = yield from asyncio.wait_for(reader.readline(), timeout=10.0)
+                logging.debug('Recived data: {}'.format(line))
+                if not line.strip():
+                    break
             except concurrent.futures.TimeoutError:
+                logging.error('Conection Timeout')
                 break
+
+        writer.write(b'{"OK":1}')
+        logging.info('Closing connection')
         writer.close()
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    server = EchoServer('192.168.81.73', 16030)
+    server = EchoServer('0.0.0.0', 16030)
     try:
         server.start()
     except KeyboardInterrupt:
