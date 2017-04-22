@@ -108,7 +108,6 @@ class MegadServer:
         """Need to manual spliting, cause parse_qsl dont work with semicolons properly"""
         query_param = urlsplit(url).query
         decoded_params = {}
-        print('QUERY RECIEVE: ', query_param)
         if '&' in query_param:
             for param in query_param.split('&'):
                 if '=' in param:
