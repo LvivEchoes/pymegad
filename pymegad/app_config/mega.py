@@ -1,0 +1,18 @@
+"""
+Define Megad API Definition
+"""
+
+CMD_ALL = 'all'
+CMD_MEGAID = 'mdid'
+CMD_START = 'st'
+
+CMD_PORT_UPDATE = 'pt'
+CMD_PORT_OFF = 'm'
+
+CMD_OFF_STATE = 0
+CMD_ON_STATE = 1
+CMD_CHANGE_STATE = 2
+
+CONF_ON_STATE = 'ON'
+CONF_OFF_STATE = 'OFF'
+CONF_DEFAULT_PASSWORD = 'sec'

@@ -3,9 +3,9 @@
 from __future__ import print_function
 
 import os
+import subprocess
 import sys
 import time
-import subprocess
 
 # Import parameters from the setup file.
 sys.path.append('.')

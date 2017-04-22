@@ -1,0 +1,19 @@
+switch:
+  - platform: megad
+    ip: 192.168.81.73
+    password: sec
+    name: Desktop test
+    ports:
+      5:
+        name: Кухня освітлення
+      6:
+        name: Коридор освітлення
+  - platform: megad
+    ip: 192.168.0.14
+    password: sec
+    name: Mega2561
+    ports:
+      0:
+        name: Кухня бра
+      6:
+        name: Коридор освітлення
