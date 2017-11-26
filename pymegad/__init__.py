@@ -2,7 +2,11 @@
 """Control your home with MegaD Devices"""
 
 from pymegad import metadata
+import logging
 
+logging.basicConfig(level=logging.DEBUG)
+
+logger = logging.getLogger('pymegad')
 
 __version__ = metadata.version
 __author__ = metadata.authors[0]

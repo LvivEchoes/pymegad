@@ -10,3 +10,16 @@ switch:
         name: Кухня освітлення
       6:
         name: Коридор освітлення
+
+
+light:
+  - platform: megad
+    ip: 192.168.88.14
+    pass: sec
+    name: Desktop test
+    ports:
+      7:
+        name: Кухня освітлення
+      8:
+        name: Кухня стіл
+

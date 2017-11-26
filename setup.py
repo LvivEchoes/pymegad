@@ -12,6 +12,7 @@ from distutils import spawn
 
 try:
     import colorama
+
     colorama.init()  # Initialize colorama on Windows
 except ImportError:
     # Don't require colorama just for running paver tasks. This allows us to
@@ -209,7 +210,6 @@ python_version_specific_requires = []
 if sys.version_info < (2, 7) or (3, 0) <= sys.version_info < (3, 3):
     python_version_specific_requires.append('argparse')
 
-
 # See here for more options:
 # <http://pythonhosted.org/setuptools/setuptools.html>
 setup_dict = dict(
@@ -242,8 +242,8 @@ setup_dict = dict(
     ],
     packages=find_packages(exclude=(TESTS_DIRECTORY,)),
     install_requires=[
-        # your module dependencies
-    ] + python_version_specific_requires,
+                         # your module dependencies
+                     ] + python_version_specific_requires,
     # Allow tests to be run with `python setup.py test'.
     tests_require=[
         'pytest==2.5.1',
@@ -252,15 +252,7 @@ setup_dict = dict(
     ],
     cmdclass={'test': TestAllCommand},
     zip_safe=False,  # don't use eggs
-    entry_points={
-        'console_scripts': [
-            'pymegad_cli = pymegad.main:entry_point'
-        ],
-        # if you have a gui, use this
-        # 'gui_scripts': [
-        #     'pymegad_gui = pymegad.gui:entry_point'
-        # ]
-    }
+
 )
 
 
