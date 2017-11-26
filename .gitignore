@@ -39,3 +39,5 @@ pip-log.txt
 
 ## idea files
 .idea/*
+/utils/
+/pymegad/meg.py
