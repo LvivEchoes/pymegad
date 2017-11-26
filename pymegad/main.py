@@ -17,13 +17,15 @@ class MegadServer:
         self._device_list = {}
         self._config = {}
         self.ports = {}
+
         self.mega_conf_load()
         self.set_config(config)
         self.config_parser()
         self.generate_ports()
         self.get_port_status()
+
         self._loop = loop or asyncio.get_event_loop()
-        self._server = asyncio.start_server(self.handle_connection, host=host, port=port)
+        self._server = asyncio.start_server(self.async_handle_connection, host=host, port=port)
 
     def set_config(self, config=None):
         if config:
@@ -82,7 +84,7 @@ class MegadServer:
             self._loop.close()
 
     @asyncio.coroutine
-    def handle_connection(self, reader, writer):
+    def async_handle_connection(self, reader, writer):
         peername = writer.get_extra_info('peername')
         logging.info('Accepted connection from {}'.format(peername))
         get_params = False
@@ -144,7 +146,8 @@ class MegadServer:
 
     def port_state_update(self, port, status):
         port_instance = self.ports.get(port)
-        port_instance.set_state(True if status.lower() == 'on' else False)
+        if port_instance:
+            port_instance.set_state(True if status.lower() == 'on' else False)
 
     def parse_cmd(self, device, cmd):
         command = self.cmd_decode(cmd)
