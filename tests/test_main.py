@@ -9,7 +9,7 @@ import pytest
 parametrize = pytest.mark.parametrize
 
 from pymegad import metadata
-from pymegad.main import main
+from pymegad.mega import main
 
 
 class TestMain(object):

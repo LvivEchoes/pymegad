@@ -1,7 +1,7 @@
 switch:
   - platform: megad
     ip: 192.168.88.14
-    pass: sec
+    password: sec
     name: Desktop test
     ports:
       0:
@@ -15,7 +15,7 @@ switch:
 light:
   - platform: megad
     ip: 192.168.88.14
-    pass: sec
+    password: sec
     name: Desktop test
     ports:
       7:
