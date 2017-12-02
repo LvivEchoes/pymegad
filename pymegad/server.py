@@ -2,47 +2,67 @@ import asyncio
 from typing import Union
 
 import concurrent.futures
-
+import asyncio.streams
 from pymegad.config import Config
 
 from pymegad.const import *
 from pymegad import logger
 from pymegad.mega import MegaDevice
 
-config = Config()
-
 
 class MegadServer:
-    def __init__(self, host, port, loop=None):
+    def __init__(self, host, port, config=None, loop=None, bound_callback=None):
 
-        self._cfg_devices = config.devices
-        self._mega_variables = config.mega_variables
+        self._host = host
+        self._port = port
 
-        self.connected_devices = {}
+        self._config = Config(config)
+        self._callback = bound_callback
+        self._connected_devices = {}
+        self._devices = {}
 
-        self._loop = loop or asyncio.get_event_loop()
-        self._server = asyncio.start_server(self.handle_incomming_connection, host=host, port=port)
+        self._cfg_devices = self._config.devices
+        self._mega_variables = self._config.mega_variables
+
+        self._loop = loop
+
+        for ip in self._cfg_devices:
+            self._loop.create_task(self.detect_device(ip))
+
+        self._server = None
 
     @property
     def devices(self):
-        return self.connected_devices
+        return self._devices
 
-    def start(self, and_loop=True):
-        self._server = self._loop.run_until_complete(self._server)
+    @property
+    def connected_devices(self):
+        return self._connected_devices
 
-        logger.info('Listening established on {0}'.format(self._server.sockets[0].getsockname()))
+    @asyncio.coroutine
+    def start(self):
 
-        if and_loop:
-            self._loop.run_forever()
+        self._server = yield from self._loop.create_task(
+            asyncio.start_server(
+                self.handle_incomming_connection, host=self._host, port=self._port
+            )
+        )
 
-    def stop(self, and_loop=True):
+        logger.info('Listening established on {0}'.format(
+            self._server.sockets[0].getsockname())
+        )
+
+    @asyncio.coroutine
+    def stop(self):
         self._server.close()
+        yield from self._server.wait_closed()
 
-        if and_loop:
-            self._loop.close()
+    @asyncio.coroutine
+    def check_device(self, ip, device):
+        yield from device.check_online()
 
-    def add_device(self, ip, device):
-        self.connected_devices[ip] = device
+        if device.is_online:
+            self._connected_devices[ip] = device
 
     @asyncio.coroutine
     def handle_incomming_connection(self, reader, writer):
@@ -50,14 +70,14 @@ class MegadServer:
 
         logger.info('Accepted connection from {}'.format(peer_name))
 
-        device = self.detect_device(peer_name[0])
+        device = yield from self.detect_device(peer_name[0])
 
         recived_data = False
 
         while not reader.at_eof():
             try:
                 response = yield from asyncio.wait_for(
-                    reader.readline(), timeout=10.0
+                    reader.readline(), timeout=READ_TIMEOUT
                 )
 
                 line = response.decode().strip()
@@ -96,51 +116,41 @@ class MegadServer:
         writer.write(OK_RESPONSE.encode())
         writer.write(CONTENT_TYPE.encode())
 
+    @asyncio.coroutine
     def detect_device(self, ip) -> Union[MegaDevice, bool]:
-        if ip in self.connected_devices:
-            return self.connected_devices[ip]
+
+        device = self.connected_devices.get(ip)
+
+        if device:
+            return device
 
         if ip in self._cfg_devices:
             prepare_device = self._cfg_devices[ip]
-            prepare_device.update({"loop": self._loop})
+            prepare_device.update({
+                "loop": self._loop,
+                "config": self._config,
+                "callback": self._callback
+            })
 
-            self.add_device(ip, MegaDevice(**prepare_device))
+            mega_device = MegaDevice(**prepare_device)
+            self._devices[ip] = mega_device
 
-            return self.connected_devices[ip]
+            yield from self.check_device(ip, mega_device)
+
+            return self._connected_devices.get(ip)
 
         return False
 
-        # def port_state_update(self, param, port_state):
-        #     raise NotImplemented()
-        #
-        # def set_state_all(self, all_statuses, device):
-        #     raise NotImplemented()
-        #
-        # def log_port_status(self):
-        #     raise NotImplemented()
-        #
-        # def async_fetch_all_data(self, device):
-        #     raise NotImplemented()
-        #
-        # def parse_statuses(self, new_statuses, device):
-        #     raise NotImplemented()
-        #
-        # def recv_all_statuses(self, all_statuses, device):
-        #     raise NotImplemented()
-        #
-        # def recv_port_update(self, command, port_update, device):
-        #     raise NotImplemented()
-        #
-        # def parse_incomming_cmd(self, param, get_params):
-        #     raise NotImplemented()
-
 
 if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
+    server = MegadServer('0.0.0.0', 16030, loop=loop)
 
-    server = MegadServer('0.0.0.0', 16030)
     try:
-        server.start()
+        loop.run_until_complete(server.start())
+        loop.run_forever()
     except KeyboardInterrupt:
         pass  # Press Ctrl+C to stop
     finally:
         server.stop()
+        loop.close()

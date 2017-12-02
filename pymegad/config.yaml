@@ -1,25 +1,30 @@
-switch:
-  - platform: megad
+megad:
+  - name: Desktop test
+    id: kitchen
     ip: 192.168.88.14
     password: sec
-    name: Desktop test
-    ports:
-      0:
-        name: Кухня стіл
-      5:
-        name: Кухня освітлення
-      6:
-        name: Коридор освітлення
+    controller: 2561
+
+
+
+switch:
+  - platform: megad
+    devices:
+      kitchen:
+        0:
+          name: Кухня стіл
+        5:
+          name: Кухня освітлення
+        6:
+          name: Коридор освітлення
 
 
 light:
   - platform: megad
-    ip: 192.168.88.14
-    password: sec
-    name: Desktop test
-    ports:
-      7:
-        name: Кухня освітлення
-      8:
-        name: Кухня стіл
+    devices:
+      kitchen:
+        7:
+          name: Кухня освітлення
+        8:
+          name: Кухня стіл
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
+from functools import partial
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -9,26 +10,52 @@ from pymegad.ports import InputPort
 from pymegad.ports import OutputPort
 from pymegad.const import *
 from pymegad import logger
-from pymegad.config import Config
-from functools import singledispatch
-
-config = Config()
 
 
 class MegaDevice:
-    def __init__(self, name, platform, ip, password, ports, loop=None):
+    def __init__(self, name, ip, password, id, controller, switch, light, config, loop=None, callback=None):
+
+        self._config = config
+        self._callback = callback
         self._name = name
-        self._platform = platform
         self._ip = ip
         self._password = password
-        self._raw_ports = ports
         self._loop = loop
-        self._ports = dict()
+        self._raw_switch = switch
+        self._raw_light = light
+        self._light = dict()
+        self._switch = dict()
+        self._controller = controller
+        self._id = id
         self._connector = aiohttp.TCPConnector(loop=self._loop, limit=1)
-        self._session = aiohttp.ClientSession(connector=self._connector)
-
+        self._session = aiohttp.ClientSession(
+            connector=self._connector,
+            conn_timeout=CONNECTION_TIMEOUT,
+            read_timeout=READ_TIMEOUT
+        )
+        self._online = False
         self.generate_ports()
         self.show_port_status()
+
+    @property
+    def raw_switch(self):
+        return self._raw_switch
+
+    @property
+    def switch(self):
+        return self._switch
+
+    @property
+    def raw_light(self):
+        return self._raw_light
+
+    @property
+    def light(self):
+        return self._light
+
+    @property
+    def id(self):
+        return self._id
 
     @property
     def name(self):
@@ -43,12 +70,18 @@ class MegaDevice:
         return self._ip
 
     @property
-    def platform(self):
-        return self._platform
+    def ports(self):
+        return {**self._light, **self._switch}
 
     @property
-    def ports(self):
-        return self._ports
+    def is_online(self):
+        return self._online
+
+    @asyncio.coroutine
+    def check_online(self):
+        status = yield from self.fetch_port_status()
+        self._online = bool(status)
+        return self._online
 
     @asyncio.coroutine
     def send_cmd(self, *args, **kwargs):
@@ -58,8 +91,12 @@ class MegaDevice:
         compiled_cmd = f'?{cmd}{f"&{cmd_value}" if cmd else cmd_value}'
         request_url = f'{DEVICE_PROTOCOL}://{self.ip}/{self.password}/{compiled_cmd}'
 
-        response = yield from self._session.request('GET', request_url)
-        data = yield from response.read()
+        try:
+            response = yield from self._session.request('GET', request_url)
+            data = yield from response.read()
+        except aiohttp.ServerTimeoutError as e:
+            logger.error(f"[{self.ip}] {e}")
+            return None
 
         decoded_data = data.decode()
         logger.info(f"[{self.ip}] Incomming command {decoded_data} from device: {self.name}")
@@ -71,8 +108,8 @@ class MegaDevice:
 
         logger.info(f"[{self.ip}] Incomming command {cmd} from device: {self.name}")
 
-        all_statuses = command.get(config.mega_variables('all'))
-        updated_port = command.get(config.mega_variables('port_update'))
+        all_statuses = command.get(self._config.mega_variables('all'))
+        updated_port = command.get(self._config.mega_variables('port_update'))
 
         if all_statuses:
             yield from self.recv_all_statuses(all_statuses)
@@ -81,14 +118,13 @@ class MegaDevice:
             yield from self.recv_port_update()
         yield
 
-    @asyncio.coroutine
-    def port_state_update(self, port, status, count=None):
-        port_instance = self.ports.get(port)
-        if port_instance:
-            yield from port_instance.set_state(True if status.lower() == 'on' else False)
-            if count is not None:
-                yield from port_instance.set_count(count)
-        yield
+    def parse_state(self, port_status):
+        switch_count = None
+        if 'on' in port_status or 'off' in port_status:
+            if '/' in port_status:
+                port_status, switch_count = port_status.split('/')
+
+        return {'port_status': port_status, 'switch_count': switch_count}
 
     @asyncio.coroutine
     def set_port_status(self, port_status: str, port_id: int = None, switch_count: int = None):
@@ -97,12 +133,10 @@ class MegaDevice:
 
             # All ports update
             for port_id, port_status in enumerate(port_status.split(';')):
-                switch_count = None
-                if 'on' in port_status or 'off' in port_status:
-                    if '/' in port_status:
-                        port_status, switch_count = port_status.split('/')
 
-                    yield from self.set_port_status(port_status, port_id, switch_count)
+                state = self.parse_state(port_status)
+                if state is not None:
+                    yield from self.set_port_status(port_id=port_id, **state)
 
         else:
             # Single port update
@@ -110,11 +144,25 @@ class MegaDevice:
             port_instance = self.ports.get(port_id)
 
             if port_instance:
+                status = True if port_status == 'on' else False
 
-                yield from port_instance.set_state(True if port_status == 'on' else False)
+                if port_instance.state == status:
+                    return
+
+                yield from port_instance.set_state(status)
 
                 if switch_count is not None:
-                    yield from port_instance.set_count(switch_count)
+                    port_instance.set_count(switch_count)
+
+                if self._callback:
+                    params = {
+                        "state": status,
+                        "count": switch_count
+                    }
+                    self._callback(
+                        instance=port_instance,
+                        params=params
+                    )
 
             else:
                 logger.debug(
@@ -123,14 +171,26 @@ class MegaDevice:
         yield
 
     @asyncio.coroutine
-    def fetch_port_status(self) -> str:
+    def fetch_port_status(self, port=None) -> str:
         response = yield from self.send_cmd(cmd='all')
+        if response is None:
+            return None
+
+        if port is not None:
+            try:
+                port_status = response.split(';')[port]
+                return self.parse_state(port_status)
+            except IndexError:
+                logger.warning(f"{self.ip}] {self.name} # Can't fetch unknown port {port}.")
         return response
 
     @asyncio.coroutine
     def recv_port_update(self):
 
         new_statuses = yield from self.fetch_port_status()
+        if new_statuses is None:
+            logger.error(f"{self.ip}] {self.name} # Can't fetch other port status.")
+            return None
         yield from self.set_port_status(new_statuses)
 
     @asyncio.coroutine
@@ -138,11 +198,14 @@ class MegaDevice:
         yield from self.set_port_status(statuses)
 
     def generate_ports(self):
-        for port, param in self._raw_ports.items():
-            if param.get('type') == PORT_TYPE_INPUT:
-                self._ports[port] = InputPort(port)
-            elif param.get('type') == PORT_TYPE_OUTPUT:
-                self._ports[port] = OutputPort(port)
+
+        for port, params in self._raw_switch.items():
+            input_port = InputPort(port, device=self, **params)
+            self._switch[port] = input_port
+
+        for port, params in self._raw_light.items():
+            output_port = OutputPort(port, device=self, **params)
+            self._light[port] = output_port
 
     def show_port_status(self):
         for id, p in self.ports.items():
