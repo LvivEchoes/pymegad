@@ -10,17 +10,20 @@ class InputPort(Port):
     @asyncio.coroutine
     def turn_on(self):
 
-        response = yield from self.device.send_cmd(
-            pt=self.port,
-            cmd='d'
-        )
+        cmd = {
+            mega['port_update']: self.port,
+            mega['cmd']: mega['do_default']
+        }
+
+        response = yield from self.device.send_cmd(**cmd)
 
         if response == mega['done']:
             logger.info(f"{self} did default action.")
         else:
             logger.warning(f"{self} can't turn on. Exception: {response}")
 
-        self._state = False
+        yield from self.set_state(False)
 
+    @asyncio.coroutine
     def turn_off(self):
-        self._state = False
+        yield from self.set_state(False)

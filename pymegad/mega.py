@@ -79,7 +79,7 @@ class MegaDevice:
 
     @asyncio.coroutine
     def check_online(self):
-        status = yield from self.fetch_port_status()
+        status = yield from self.process_port_update()
         self._online = bool(status)
         return self._online
 
@@ -94,11 +94,17 @@ class MegaDevice:
         try:
             response = yield from self._session.request('GET', request_url)
             data = yield from response.read()
+
         except aiohttp.ServerTimeoutError as e:
             logger.error(f"[{self.ip}] {e}")
             return None
 
         decoded_data = data.decode()
+
+        if FETCH_ALL_AFTER_CMD.intersection(kwargs):
+            yield from self.process_port_update()
+
+
         logger.info(f"[{self.ip}] Incomming command {decoded_data} from device: {self.name}")
         return decoded_data
 
@@ -115,7 +121,7 @@ class MegaDevice:
             yield from self.recv_all_statuses(all_statuses)
 
         if updated_port:
-            yield from self.recv_port_update()
+            yield from self.process_port_update()
         yield
 
     def parse_state(self, port_status):
@@ -173,6 +179,7 @@ class MegaDevice:
     @asyncio.coroutine
     def fetch_port_status(self, port=None) -> str:
         response = yield from self.send_cmd(cmd='all')
+
         if response is None:
             return None
 
@@ -182,10 +189,11 @@ class MegaDevice:
                 return self.parse_state(port_status)
             except IndexError:
                 logger.warning(f"{self.ip}] {self.name} # Can't fetch unknown port {port}.")
+
         return response
 
     @asyncio.coroutine
-    def recv_port_update(self):
+    def process_port_update(self):
 
         new_statuses = yield from self.fetch_port_status()
         if new_statuses is None:

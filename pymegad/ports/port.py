@@ -42,6 +42,7 @@ class Port:
                 instance=self,
                 params=params
             )
+        yield
 
     @property
     def event_callback(self):
